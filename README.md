@@ -1,8 +1,5 @@
 # my_data-science-projects
 some steps and progresses about analysis of statistics 
-本项目来源于和鲸社区
-作者: ccty98
-来源: https://www.heywhale.com/mw/notebook/5fbe380365710400309cbf53
 #数据集为1912年泰坦尼克号沉船事件中乘客的信息以及存活状况，数据已经划分为训练集和测试集
 训练集：train.csv
 测试集：test.csv
