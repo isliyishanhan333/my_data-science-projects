@@ -1,0 +1,527 @@
+# 查看数据结构
+import pandas as pd
+import warnings
+warnings.filterwarnings('ignore')#忽略警告
+df=pd.read_csv("D:/示例数据集/titanic数据集/train.csv")#导入训练集数据
+dft=pd.read_csv("D:/示例数据集/titanic数据集/test.csv")#导入测试集数据
+df.head()#查看训练集数据
+dft.head()
+df.info()#查看数据结构
+dft.info()
+
+#调整数据列
+def move_column_to_end(df, col_name):
+    """将指定列移动到 DataFrame 的最后一列"""
+    if col_name not in df.columns:
+        raise ValueError(f"列 '{col_name}' 不存在于 DataFrame 中")
+    cols = [col for col in df.columns if col != col_name] + [col_name]
+    return df[cols]
+df= move_column_to_end(df, 'Survived')
+df.head()
+
+
+#合并两个数据集进行缺失值处理
+dfi=pd.concat([df,dft])#合并数据
+dfi.info()
+dfi.isna().sum()#查看缺失值
+
+#查看数据缺失值的分布情况
+import seaborn as sns
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 6))
+sns.heatmap(dfi.isnull(), cbar=True, yticklabels=False, cmap='viridis')
+plt.title('Missing Value Heatmap')
+plt.show()
+
+#画图展示数据分布情况
+import matplotlib.pyplot as plt
+plt.rcParams["font.family"] = "SimHei"  # 中文黑体显示
+plt.rcParams["axes.unicode_minus"] = False  # 解决负号显示异常的问题（可选）
+#1Pclass与输出变量之间的关系（Pclass表示船舱的等级）
+train=dfi.head(len(df))
+train.info()
+train.isna().sum()
+#分类占比
+train.groupby('Pclass')['Survived'].mean()
+# 画图展示
+fig=plt.figure()
+fig.set(alpha=0.5)#设定颜色的参数
+Survived_0=train.Pclass[train.Survived==0].value_counts()#计算训练集中未获救的Pclass的个数
+Survived_1=train.Pclass[train.Survived==1].value_counts()#计算训练集中获救的Pclass的个数
+df_S=pd.DataFrame({"未获救":Survived_0,"获救":Survived_1})#构建dataframe数据结构
+df_S.plot(kind='bar',stacked=True)
+plt.title("乘客等级的获救情况")
+plt.xlabel("乘客等级")
+plt.ylabel("数量")
+plt.show()
+
+#不同性别的存活率
+train.groupby('Sex')['Survived'].mean()
+#不同船舱等级的存活率
+train.groupby('Pclass')['Survived'].mean()
+#不同登船港口的存活率
+train.groupby('Embarked')['Survived'].mean()
+train.groupby('Sex')['Survived'].mean()
+#年龄存活率的正态分布图
+age_kd=sns.kdeplot(train["Age"][train["Survived"]==1],color='red',shade=True)
+age_kd=sns.kdeplot(train['Age'][train['Survived']==0],color='grey',shade=True)
+age_kd.set_xlabel('Age')
+age_kd.set_ylabel('Density')
+age_kd = age_kd.legend(['Survived', 'Not Survived'])
+
+# 使用pd.crosstab生成性别与舱位等级的交叉表
+cross_tab = pd.crosstab(train['Sex'], train['Pclass'])
+print(cross_tab)
+#画散点图查看生存情况与费用的关系
+plt.figure(figsize=(10, 6))
+sns.swarmplot(
+    data=train,
+    x='Survived',
+    y='Fare',
+    size=3,
+    alpha=0.7
+)
+plt.title('Fare vs Survival (Swarm Plot)')
+plt.xlabel('Survived')
+plt.ylabel('Fare')
+plt.ylim(0, 200)
+plt.show()
+
+
+#构建家庭数量与生存率的关系
+train['FamilySize'] = train['SibSp'] + train['Parch'] + 1  # 包含自己
+survival_by_family = train.groupby('FamilySize')['Survived'].mean().reset_index()
+survival_by_family.columns = ['FamilySize', 'SurvivalRate']
+# 同时统计每组人数（用于评估可靠性）
+count_by_family = train.groupby('FamilySize')['Survived'].count().reset_index()
+count_by_family.columns = ['FamilySize', 'Count']
+# 合并生存率和人数
+result = pd.merge(survival_by_family, count_by_family, on='FamilySize')
+print(result)
+plt.figure(figsize=(10, 6))
+ax = sns.barplot(data=result, x='FamilySize', y='SurvivalRate', palette='viridis')
+
+# 在柱子上显示生存率百分比和人数
+for i, row in result.iterrows():
+    ax.text(
+        i, 
+        row['SurvivalRate'] + 0.01, 
+        f"{row['SurvivalRate']:.1%}\n(n={row['Count']})", 
+        ha='center', 
+        va='bottom',
+        fontsize=9
+    )
+plt.title('Survival Rate by Family Size ')
+plt.xlabel('Family Size')
+plt.ylabel('Survival Rate')
+plt.ylim(0, 1)
+plt.xticks(rotation=0)
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.show()
+
+#性别与生存率之间有无关系
+from scipy.stats import chi2_contingency
+# 步骤1：构建列联表（交叉表）
+contingency_table = pd.crosstab(train['Sex'], train['Survived'])
+print("列联表（Sex vs Survived）:")
+print(contingency_table)
+print()
+# 步骤2：执行卡方检验
+chi2, p, dof, expected = chi2_contingency(contingency_table)
+# 步骤3：输出结果并解读
+print("卡方检验结果:")
+print(f"卡方统计量 (χ²): {chi2:.4f}")
+print(f"p 值: {p:.6f}")
+print(f"自由度 (dof): {dof}")
+print("期望频数（若独立）:")
+print(expected)
+# 步骤4：假设检验结论
+alpha = 0.05
+if p < alpha:
+    print(f"\n结论：在显著性水平 α={alpha} 下，拒绝原假设。")
+    print("→ 性别与生存状态不独立，存在显著关联。")
+else:
+    print(f"\n结论：在显著性水平 α={alpha} 下，无法拒绝原假设。")
+    print("→ 没有足够证据表明性别与生存状态相关。")
+
+
+
+#计算数值特征与 Survived 的 Spearman 相关系数
+import pandas as pd
+import numpy as np
+from scipy.stats import spearmanr
+df_corr = train.copy()
+# 将 Sex 编码为 0/1（male=0, female=1）
+df_corr['Sex'] = df_corr['Sex'].map({'male': 0, 'female': 1})
+# 确保 Survived 是数值型（通常是 int）
+df_corr['Survived'] = df_corr['Survived'].astype(int)
+# 选择要计算相关性的数值列
+numeric_cols = ['Survived', 'Pclass', 'Age', 'SibSp', 'Parch', 'Fare', 'Sex']
+# 计算 Spearman 相关系数（只关心与 Survived 的相关性）
+corr_results = []
+for col in numeric_cols:
+    if col == 'Survived':
+        continue  # 跳过自身
+    # 删除该列和 Survived 中任一为 NaN 的行
+    valid_data = df_corr[['Survived', col]].dropna()
+    if len(valid_data) < 2:
+        corr, pval = np.nan, np.nan
+    else:
+        corr, pval = spearmanr(valid_data['Survived'], valid_data[col])
+    corr_results.append({
+        'Feature': col,
+        'Spearman_Corr': corr,
+        'p_value': pval
+    })
+# 转为 DataFrame 并排序（按绝对相关性降序）
+corr_df = pd.DataFrame(corr_results)
+corr_df['Abs_Corr'] = corr_df['Spearman_Corr'].abs()
+corr_df = corr_df.sort_values('Abs_Corr', ascending=False).reset_index(drop=True)
+print("各特征与 Survived 的 Spearman 相关系数：")
+print(corr_df[['Feature', 'Spearman_Corr', 'p_value']].round(4))
+
+
+#缺失值处理，使用均值填补缺失值
+dfi["Age"]=dfi["Age"].fillna(dfi["Age"].mean())
+dfi["Fare"].value_counts()#查看缺失值情况
+dfi["Fare"]=dfi["Fare"].fillna(dfi["Fare"].mean())
+dfi["Cabin"].value_counts()
+dfi["Cabin"]=dfi["Cabin"].fillna("Unkonw")
+dfi['Deck']=dfi['Cabin'].map(lambda x:x[0])#提取首字母作为一个新的列
+dfi["Cabin"].value_counts()
+dfi.isna().sum()#查看缺失值
+dfi['FamilySize'] = dfi['SibSp'] + dfi['Parch'] + 1  # 包含自己
+dfi.head()
+
+#分类数据转换
+#Name中提取称谓title
+#定义一个函数来获取姓名信息
+def reclassis(name):
+    s1=name.split(",")[1]
+    s2=s1.split(".")[0]
+    return s2.strip()
+dfi['title']=dfi['Name'].map(reclassis)
+dfi['title'].value_counts()#分类计数
+dfi_dict={'Miss': 'Miss',
+    'Mlle': 'Miss',  
+    'Ms': 'Miss',   
+    'Mme': 'Mrs',        
+    'Mrs': 'Mrs',
+    'Mr': 'Mr',
+    'Master': 'Master', 
+    # 专业/贵族头衔 → 归为 Rare
+    'Dr': 'Rare',
+    'Rev': 'Rare',       # 牧师
+    'Col': 'Rare',       # 上校
+    'Major': 'Rare',
+    'Capt': 'Rare',      # 船长
+    'Sir': 'Rare',       # 爵士
+    'Don': 'Rare',       # 西班牙贵族
+    'Jonkheer': 'Rare',  # 荷兰贵族
+    'Countess': 'Rare',  # 女伯爵
+    'Lady': 'Rare',      # 贵妇
+    'Dona': 'Rare'       # 葡萄牙/西班牙贵妇
+         }
+dfi['title']=dfi['title'].map(dfi_dict).fillna('Rare')
+dfi['title'].value_counts()#分类
+dfi.head(891).groupby('title')['Survived'].mean()#查看不同类别的人的存活率
+#判断是否单独
+def IsAlone(x):
+    if x==1:
+        return 'alone'
+    else:
+        return 'more'
+dfi['alone']=dfi['FamilySize'].map(IsAlone)
+dfi.head()
+
+#规定年龄
+def Olderflip(x):
+    if x<=16:
+        return 'child'
+    elif 16<x<=35:
+        return "young"
+    elif 35<x<=60:
+        return "old"
+    else:
+        return 'older'
+dfi['Olderf']=dfi['Age'].map(Olderflip)
+dfi.head()
+dfi.head(891).groupby('Olderf')['Survived'].mean()
+dfi.describe()
+def FareBand(x):
+    if x<=7.895800:
+        return '低'
+    elif 7.895800<x<=14.454200:
+        return "偏低"
+    elif 14.454200<x<=31.275000:
+        return "偏高"
+    else:
+        return '高'
+dfi['FB']=dfi['Fare'].map(FareBand)
+dfi.head()
+dfi.head(891).groupby('FB')['Survived'].mean()
+dfi.head()
+#将分类变量转换成数字（独热编码），对所有的分类变量进行此操作，避免模型训练产生问题,并对连续变量进行标准化处理
+dummies_Embarked=pd.get_dummies(dfi['Embarked'])
+D_Sex=pd.get_dummies(dfi['Sex'])
+D_Deck=pd.get_dummies(dfi['Deck'])
+D_Pclass=pd.get_dummies(dfi['Pclass'])
+D_title=pd.get_dummies(dfi['title'])
+D_alone=pd.get_dummies(dfi['alone'])
+D_Olderf=pd.get_dummies(dfi['Olderf'])
+D_FB=pd.get_dummies(dfi['FB'])
+
+#数据标准化
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+dfi["age_scaled"]=scaler.fit_transform(dfi["Age"].values.reshape(-1,1))
+dfi["fare_scaled"]=scaler.fit_transform(dfi["Fare"].values.reshape(-1,1))
+dff=pd.concat([dfi,dummies_Embarked,D_Sex,D_Deck,D_Pclass,D_title,D_alone,D_Olderf,D_FB],axis=1)
+dff.info()
+# 删除不必要的列次
+dropcols=['Embarked','title','PassengerId','Pclass','Name','Sex','SibSp','Age','Fare','Parch','Ticket','Cabin','Deck','FB','FamilySize','alone','Olderf']
+dff.drop(columns=dropcols, inplace=True)
+dff.head(2)
+dff.info()
+
+
+
+# 模型训练
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split, cross_validate
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from xgboost import XGBClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+import warnings
+warnings.filterwarnings('ignore')
+# === 数据准备 ===
+trainf = dff.head(891)
+x = trainf.drop("Survived", axis=1)
+# 关键修复：将 Survived 列转换为整数类型
+y = trainf["Survived"].astype(int)  # 添加 .astype(int)
+print("Survived 列的值分布:")
+print(y.value_counts())
+print(f"Survived 数据类型: {y.dtype}")
+# === 划分训练/验证集 ===
+x_train, x_test, y_train, y_test = train_test_split(
+    x, y, test_size=0.2, random_state=42, stratify=y
+)
+# === 模型评估 ===
+scoring = {
+    'accuracy': 'accuracy',
+    'precision': 'precision', 
+    'recall': 'recall',
+    'f1': 'f1',
+    'roc_auc': 'roc_auc'
+}
+def evaluate_models(x, y, cv=5):
+    # 将数据转换为 NumPy 数组以避免兼容性问题
+    x_array = x.values if hasattr(x, 'values') else x
+    y_array = y.values if hasattr(y, 'values') else y
+    
+    models = {
+        'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
+        'Random Forest': RandomForestClassifier(random_state=42),
+        'SVM': SVC(probability=True, random_state=42),
+        'XGBoost': XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42),
+        'KNN': KNeighborsClassifier()
+    }
+    results = {}
+    
+    for name, model in models.items():
+        print(f"Running CV for {name}...")
+        try:
+            cv_results = cross_validate(model, x_array, y_array, cv=cv, scoring=scoring, n_jobs=-1)
+            results[name] = {
+                'Accuracy': cv_results['test_accuracy'].mean(),
+                'Precision': cv_results['test_precision'].mean(),
+                'Recall': cv_results['test_recall'].mean(),
+                'F1': cv_results['test_f1'].mean(),
+                'AUC': cv_results['test_roc_auc'].mean()
+            }
+            print(f"  {name} 完成: Accuracy = {results[name]['Accuracy']:.4f}")
+        except Exception as e:
+            print(f"  {name} 出错: {e}")
+            # 跳过出错的模型
+            continue
+    
+    return pd.DataFrame(results).T if results else pd.DataFrame()
+
+# 执行交叉验证
+cv_results_df = evaluate_models(x_train, y_train, cv=5)
+
+if not cv_results_df.empty:
+    print("\n=== 5-Fold Cross Validation Results ===")
+    print(cv_results_df.round(4))
+    
+    # 测试集评估
+    print("\n=== 测试集评估 ===")
+    best_model_name = cv_results_df['Accuracy'].idxmax()
+    print(f"最佳模型: {best_model_name}")
+    
+    # 重新训练最佳模型
+    model_mapping = {
+        'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
+        'Random Forest': RandomForestClassifier(random_state=42),
+        'SVM': SVC(probability=True, random_state=42),
+        'XGBoost': XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42),
+        'KNN': KNeighborsClassifier()
+    }
+    
+    best_model = model_mapping[best_model_name]
+    best_model.fit(x_train.values, y_train.values)  # 使用 .values 确保兼容性
+    
+    y_pred = best_model.predict(x_test.values)
+    test_accuracy = accuracy_score(y_test, y_pred)
+    print(f"测试集准确率: {test_accuracy:.4f}")
+else:
+    print("所有模型都失败了，请检查数据")
+
+
+# 在验证集上评估最终模型
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+# 设置中文字体和显示
+sns.set_style("whitegrid")#设置图片为白底加网格的形式
+# === 选择最优模型 ===
+print("=== 模型性能总结 ===")
+print(cv_results_df.round(4))
+# 根据AUC选择最优模型（AUC对不平衡数据更鲁棒）
+best_model_name = cv_results_df['AUC'].idxmax()
+print(f"\n🎯 最优模型选择: {best_model_name}")
+print(f"最佳AUC: {cv_results_df.loc[best_model_name, 'AUC']:.4f}")
+print(f"最佳准确率: {cv_results_df.loc[best_model_name, 'Accuracy']:.4f}")
+# === 重新训练最优模型 ===
+model_mapping = {
+    'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
+    'Random Forest': RandomForestClassifier(random_state=42),
+    'SVM': SVC(probability=True, random_state=42),
+    'XGBoost': XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42),
+    'KNN': KNeighborsClassifier()
+}
+best_model = model_mapping[best_model_name]
+print(f"\n=== 训练最优模型 ({best_model_name}) ===")
+print(best_model.fit(x_train.values, y_train.values))
+# === 在验证集上进行预测 ===
+y_pred = best_model.predict(x_test.values)
+y_pred_proba = best_model.predict_proba(x_test.values)[:, 1]
+print(y_pred)
+print(y_pred_proba)
+# 自动选择可用中文字体
+def set_chinese_font():
+    import platform
+    system = platform.system()
+    if system == "Windows":
+        plt.rcParams['font.sans-serif'] = ['SimHei']
+    elif system == "Darwin":  # macOS
+        plt.rcParams['font.sans-serif'] = ['PingFang HK', 'Arial Unicode MS', 'Hiragino Sans GB']
+    else:  # Linux
+        plt.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'DejaVu Sans']
+    plt.rcParams['axes.unicode_minus'] = False  # 正常显示负号
+set_chinese_font()
+# === 1. 混淆矩阵 ===
+print("\n=== 混淆矩阵 ===")
+cm = confusion_matrix(y_test, y_pred)
+print(f"混淆矩阵:\n{cm}")
+
+
+# 绘制混淆矩阵热力图
+plt.figure(figsize=(15, 4))
+plt.subplot(1, 3, 1)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+            xticklabels=['死亡(0)', '生存(1)'], 
+            yticklabels=['死亡(0)', '生存(1)'])
+plt.title(f'{best_model_name} - 混淆矩阵')
+plt.xlabel('预测标签')
+plt.ylabel('真实标签')
+# === 2. 分类报告 ===
+print("\n=== 详细分类报告 ===")
+report = classification_report(y_test, y_pred, target_names=['死亡(0)', '生存(1)'])
+print(report)
+
+# === 3. ROC曲线和AUC值 ===
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+roc_auc = auc(fpr, tpr)
+print(f"\n=== ROC曲线分析 ===")
+print(f"AUC值: {roc_auc:.4f}")
+# 绘制ROC曲线
+plt.subplot(1, 3, 2)
+plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC曲线 (AUC = {roc_auc:.4f})')
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--', label='随机猜测')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('假正率 (False Positive Rate)')
+plt.ylabel('真正率 (True Positive Rate)')
+plt.title(f'{best_model_name} - ROC曲线')
+plt.legend(loc="lower right")
+plt.grid(True)
+# === 4. 模型性能对比图 ===
+plt.subplot(1, 1, 1)
+metrics = ['Accuracy', 'Precision', 'Recall', 'F1']
+models = cv_results_df.index
+x_pos = np.arange(len(models))
+# 创建分组柱状图
+bar_width = 0.2
+for i, metric in enumerate(metrics):
+    values = cv_results_df[metric].values
+    plt.bar(x_pos + i * bar_width, values, bar_width, 
+            label=metric, alpha=0.8)
+plt.xlabel('机器学习模型')
+plt.ylabel('分数')
+plt.title('模型性能对比')
+plt.xticks(x_pos + bar_width * 1.5, models, rotation=45)
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()
+# === 6. 模型比较总结 ===
+print("\n=== 所有模型性能排名 ===")
+for metric in ['Accuracy', 'Precision', 'Recall', 'F1', 'AUC']:
+    best_model_for_metric = cv_results_df[metric].idxmax()
+    best_score = cv_results_df[metric].max()
+    print(f"{metric}: {best_model_for_metric} ({best_score:.4f})")
+# === 7. 预测概率分布 ===
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 1, 1)
+# 生存概率分布
+plt.hist(y_pred_proba[y_test == 1], alpha=0.7, label='实际生存', bins=20)
+plt.hist(y_pred_proba[y_test == 0], alpha=0.7, label='实际死亡', bins=20)
+plt.xlabel('预测生存概率')
+plt.ylabel('频数')
+plt.title('预测概率分布')
+plt.legend()
+plt.tight_layout()
+plt.show()
+print(f"\n模型评估完成！最优模型 {best_model_name} 在验证集上表现良好。")
+
+
+# 输出结果
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+# 加载新数据
+new_data1 = dff.iloc[-418:]          # 最后418行
+# new_data2 = new_data1.loc[:,:-1]      
+dropcols = ['Survived']
+# 删除目标列
+new_data1.drop(columns=dropcols, inplace=True, errors='ignore')
+# 关键修复：统一列名为字符串
+new_data1.columns = new_data1.columns.astype(str)
+# 检查缺失值（可选）
+print(new_data1.isna().sum())
+# 预测
+predictions = best_model.predict(new_data1)
+predictions_proba = best_model.predict_proba(new_data1)[:, 1]
+# 添加结果到原始数据
+new_data_with_predictions = dft.copy()
+new_data_with_predictions['Predicted_Survived'] = predictions
+new_data_with_predictions['Predicted_Probability'] = predictions_proba
+# 导出
+output_file_path = "D:/示例数据集/titanic数据集/ptest.xlsx"  # 改为 .xlsx
+new_data_with_predictions.to_excel(output_file_path, index=False)
+print(f"预测结果已成功保存至 {output_file_path}")
